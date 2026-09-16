@@ -1,0 +1,8 @@
+packages:
+  - '.'
+
+allowBuilds:
+  esbuild@0.28.2: true
+
+# Keep running checks separate from dependency installation.
+verifyDepsBeforeRun: false
