@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
@@ -34,7 +35,7 @@ export function AdSlot() {
 }
 
 export function Brand() {
-  return <Link href="/" className="brand" aria-label="Oportunia, inicio"><span className="brand-symbol" aria-hidden="true" />oportunia<span className="brand-stop">.</span></Link>;
+  return <Link href="/" className="brand" aria-label="Oportunia, inicio"><Image src="/logo_oportunia.png" alt="Logotipo de Oportunia" width={180} height={60} priority style={{ width: "auto", height: "38px" }} /></Link>;
 }
 
 export function Header() {
