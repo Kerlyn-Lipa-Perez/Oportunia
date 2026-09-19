@@ -10,6 +10,6 @@ export async function POST(request: Request) {
   try { data = JSON.parse(body); } catch { return new NextResponse(null, { status: 400 }); }
   if (!data || !['view', 'official_click', 'save'].includes(data.name)) return new NextResponse(null, { status: 400 });
   for (const key of ['opportunityId', 'source', 'medium', 'campaign', 'content']) if (data[key] !== undefined && typeof data[key] !== 'string') return new NextResponse(null, { status: 400 });
-  recordEvent(data);
+  await recordEvent(data);
   return new NextResponse(null, { status: 204 });
 }

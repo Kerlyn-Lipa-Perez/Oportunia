@@ -7,7 +7,7 @@ import type { Opportunity } from '@/lib/types';
 export const runtime = 'nodejs';
 export async function GET() {
   if (!await getEditor()) return NextResponse.json({ error: 'Acceso no autorizado.' }, { status: 401 });
-  return NextResponse.json(getAllOpportunities());
+  return NextResponse.json(await getAllOpportunities());
 }
 export async function POST(request: Request) {
   const editor = await getEditor();
@@ -19,7 +19,7 @@ export async function POST(request: Request) {
   try { input = JSON.parse(body); if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error(); } catch { return NextResponse.json({ error: 'Datos no válidos.' }, { status: 400 }); }
   const str = (key: string) => typeof input[key] === 'string' ? (input[key] as string).trim().slice(0, 8000) : '';
   const list = (key: string) => Array.isArray(input[key]) ? (input[key] as unknown[]).filter((item): item is string => typeof item === 'string').map((item) => item.trim().slice(0, 2000)).filter(Boolean).slice(0, 40) : [];
-  const existing = str('id') ? getOpportunityById(str('id')) : undefined;
+  const existing = str('id') ? await getOpportunityById(str('id')) : undefined;
   if (str('id') && !existing) return NextResponse.json({ error: 'La ficha ya no existe.' }, { status: 404 });
   const id = existing?.id || randomUUID();
   const slug = existing?.slug || `${str('title').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 90)}-${id.slice(0, 8)}`;
@@ -38,6 +38,6 @@ export async function POST(request: Request) {
   const errors = validateOpportunity(opportunity);
   if (publishing && !verified && !(status === 'closed' && existing?.verifiedBy)) errors.push('Confirma que revisaste las bases y la fuente oficial para publicar.');
   if (errors.length) return NextResponse.json({ error: errors.join(' ') }, { status: 400 });
-  saveOpportunity(opportunity);
+  await saveOpportunity(opportunity);
   return NextResponse.json(opportunity);
 }

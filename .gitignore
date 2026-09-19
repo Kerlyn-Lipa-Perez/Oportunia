@@ -10,3 +10,4 @@ playwright-report/
 .local/
 .pnpm-store/
 .atl/
+.neon
