@@ -2,10 +2,8 @@ packages:
   - '.'
 
 allowBuilds:
-  core-js@3.50.0: false
-  esbuild@0.18.20: true
-  esbuild@0.25.12: true
-  esbuild@0.28.2: true
+  core-js: false
+  esbuild: true
 
 # Keep running checks separate from dependency installation.
 verifyDepsBeforeRun: false
