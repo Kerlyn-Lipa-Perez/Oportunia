@@ -3,6 +3,7 @@ import { authorizationStatus, requireAdminFromRequest, validOrigin } from '@/lib
 import { runApprovedSources } from '@/lib/ingestion/admin';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   const access = await requireAdminFromRequest(request);

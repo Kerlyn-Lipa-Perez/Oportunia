@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { validOrigin } from '@/lib/auth';
 import { recordEvent } from '@/lib/repository';
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 export async function POST(request: Request) {
   if (!validOrigin(request)) return NextResponse.json({ error: 'Origen no permitido.' }, { status: 403 });
   const body = await request.text();

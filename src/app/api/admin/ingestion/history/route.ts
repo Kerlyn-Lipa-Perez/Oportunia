@@ -3,6 +3,7 @@ import { authorizationStatus, requireAdminFromRequest } from '@/lib/auth';
 import { getIngestionHistory } from '@/lib/repository';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   const access = await requireAdminFromRequest(request);

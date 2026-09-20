@@ -5,6 +5,7 @@ import { getAllOpportunities, getOpportunityById, saveOpportunity } from '@/lib/
 import { validateOpportunity } from '@/lib/opportunities';
 import type { Opportunity } from '@/lib/types';
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {
   const access = await requireAdminFromRequest(request);
   if (access.kind !== 'admin') return NextResponse.json({ error: 'Acceso no autorizado.' }, { status: authorizationStatus(access) });

@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { createNeonAuth } from '@neondatabase/auth/next/server';
+import { createNeonAuth, type NeonAuth } from '@neondatabase/auth/next/server';
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { appProfiles } from '@/lib/db/schema';
@@ -9,10 +9,47 @@ import type { AdminAccess } from '@/lib/authz';
 
 export { authorizationStatus, resolveAdminAccess, type AdminAccess, type SessionIdentity } from '@/lib/authz';
 
-export const auth = createNeonAuth({
-  baseUrl: process.env.NEON_AUTH_BASE_URL!,
-  cookies: { secret: process.env.NEON_AUTH_COOKIE_SECRET! },
+export const auth: NeonAuth = new Proxy({} as NeonAuth, {
+  get(_target, prop) {
+    const instance = getAuth();
+    const value = Reflect.get(instance, prop);
+    if (typeof value === 'function') {
+      return (value as (...args: never[]) => unknown).bind(instance);
+    }
+    return value;
+  },
 });
+
+function createAuthClient(): NeonAuth {
+  const baseUrl = process.env.NEON_AUTH_BASE_URL;
+  const secret = process.env.NEON_AUTH_COOKIE_SECRET;
+  if (!baseUrl) {
+    throw new Error(
+      'NEON_AUTH_BASE_URL environment variable is required. ' +
+        'Pull it with `neon env pull` or set it in the Vercel project environment.',
+    );
+  }
+  if (!secret) {
+    throw new Error(
+      'NEON_AUTH_COOKIE_SECRET environment variable is required. ' +
+        'Set a random value of at least 32 characters in the Vercel project environment.',
+    );
+  }
+  return createNeonAuth({ baseUrl, cookies: { secret } });
+}
+
+// Lazy singleton — the client is created on first request, not at module
+// import time. This lets `next build` collect route configuration without
+// auth env vars present, mirroring the lazy pattern in `@/lib/db`.
+let _auth: NeonAuth | null = null;
+
+/** Request-time accessor for the Neon Auth client. Throws only when called without env vars. */
+export function getAuth(): NeonAuth {
+  if (!_auth) {
+    _auth = createAuthClient();
+  }
+  return _auth;
+}
 
 async function findApplicationRole(userId: string): Promise<string | null> {
   const profile = await db
@@ -26,7 +63,7 @@ async function findApplicationRole(userId: string): Promise<string | null> {
 
 /** Central DAL check for Server Components and route handlers. */
 export async function requireAdmin(): Promise<AdminAccess> {
-  const { data: session } = await auth.getSession();
+  const { data: session } = await getAuth().getSession();
   return resolveAdminAccess(session?.user ?? null, findApplicationRole);
 }
 

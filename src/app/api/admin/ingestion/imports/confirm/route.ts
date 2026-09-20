@@ -3,6 +3,7 @@ import { authorizationStatus, requireAdminFromRequest, validOrigin } from '@/lib
 import { confirmExcelImport } from '@/lib/ingestion/admin';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 async function workbookFromRequest(request: Request): Promise<ArrayBuffer> {
   const form = await request.formData();
