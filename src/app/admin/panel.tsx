@@ -1,15 +1,20 @@
 'use client';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Plus, LogOut, Pencil, X, Eye, ShieldCheck, Search, FileText } from 'lucide-react';
+import { createAuthClient } from '@neondatabase/auth/next';
+import { ArrowLeft, Plus, LogOut, Pencil, X, Eye, ShieldCheck, Search, FileText, Download, Upload, Play, History, AlertTriangle } from 'lucide-react';
 import type { Opportunity } from '@/lib/types';
 import { getDeadline, modalities, opportunityTypes, levels } from '@/lib/opportunities';
 
 type Draft = Omit<Opportunity, 'id'> & { id?: string; verified?: boolean };
 const empty = (): Draft => ({ slug: '', entity: '', entityShort: '', title: '', type: 'Empleo público', region: 'Lima', modality: 'Presencial', level: 'Profesional', careers: [], vacancies: 1, closingDate: '', officialUrl: '', summary: '', beforeApplying: '', requirements: [], salary: '', status: 'draft', verifiedAt: '', verifiedBy: '', publishedAt: '', isDemo: false, featured: false, color: '#245be8', verified: false });
 const statusNames = { draft: 'Borrador', published: 'Publicada', closed: 'Cerrada', scheduled: 'Programada' };
+type RowIssue = { rowNumber: number; errors?: string[]; reason?: string; normalizedOfficialUrl?: string };
+type ImportPreview = { valid: number; invalid: number; duplicates: number; issues: RowIssue[] };
+type IngestionRun = { id: string; trigger: string; status: string; startedAt: string; completedAt?: string; importedCount?: number; invalidCount?: number; duplicateCount?: number; error?: string };
+const authClient = createAuthClient();
 
-export default function AdminPanel({ configured, editor, initial }: { configured: boolean; editor: string | null; initial: Opportunity[] }) {
+export default function AdminPanel({ access, editor, initial }: { access: 'admin' | 'unauthenticated' | 'forbidden'; editor: string | null; initial: Opportunity[] }) {
   const [items, setItems] = useState(initial);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [preview, setPreview] = useState(false);
@@ -18,6 +23,11 @@ export default function AdminPanel({ configured, editor, initial }: { configured
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [busy, setBusy] = useState(false);
+  const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [history, setHistory] = useState<IngestionRun[]>([]);
+  const [ingestionBusy, setIngestionBusy] = useState(false);
+  const [ingestionError, setIngestionError] = useState('');
   const dialogRef = useRef<HTMLDialogElement>(null);
   const isEditing = draft !== null;
   useEffect(() => {
@@ -28,18 +38,62 @@ export default function AdminPanel({ configured, editor, initial }: { configured
   async function login(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError('');
     const data = new FormData(event.currentTarget);
-    try { const response = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: data.get('email'), password: data.get('password') }) }); const result = await response.json(); if (!response.ok) throw new Error(result.error); window.location.reload(); } catch (e) { setError(e instanceof Error ? e.message : 'No se pudo iniciar sesión.'); } finally { setBusy(false); }
+    try { const { error: authError } = await authClient.signIn.email({ email: String(data.get('email') || ''), password: String(data.get('password') || '') }); if (authError) throw new Error(authError.message || 'No se pudo iniciar sesión.'); window.location.reload(); } catch (e) { setError(e instanceof Error ? e.message : 'No se pudo iniciar sesión.'); } finally { setBusy(false); }
   }
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (!draft) return; setBusy(true); setError('');
     try { const response = await fetch('/api/admin/opportunities', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(draft) }); const result = await response.json(); if (!response.ok) throw new Error(result.error); setItems((all) => [result, ...all.filter((item) => item.id !== result.id)]); setDraft(null); setSuccess('Convocatoria guardada correctamente.'); } catch (e) { setError(e instanceof Error ? e.message : 'No se pudo guardar.'); } finally { setBusy(false); }
   }
+  async function loadHistory() {
+    try {
+      const response = await fetch('/api/admin/ingestion/history');
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error);
+      setHistory(Array.isArray(result.runs) ? result.runs : []);
+    } catch (e) { setIngestionError(e instanceof Error ? e.message : 'No se pudo cargar el historial.'); }
+  }
+  async function previewImport(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const file = new FormData(event.currentTarget).get('file');
+    if (!(file instanceof File) || !file.size) { setIngestionError('Selecciona un archivo .xlsx.'); return; }
+    setIngestionBusy(true); setIngestionError(''); setImportPreview(null); setImportFile(null);
+    try {
+      const data = new FormData(); data.set('file', file);
+      const response = await fetch('/api/admin/ingestion/imports/preview', { method: 'POST', body: data });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error);
+      setImportPreview(result); setImportFile(file);
+    } catch (e) { setIngestionError(e instanceof Error ? e.message : 'No se pudo validar el archivo.'); } finally { setIngestionBusy(false); }
+  }
+  async function confirmImport() {
+    if (!importPreview || !importFile) return;
+    setIngestionBusy(true); setIngestionError('');
+    try {
+      const data = new FormData(); data.set('file', importFile);
+      const response = await fetch('/api/admin/ingestion/imports/confirm', { method: 'POST', body: data });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error);
+      setSuccess(`${result.imported || 0} borradores importados. ${result.invalid || 0} filas inválidas y ${result.duplicates || 0} duplicadas no se incorporaron.`);
+      setImportPreview(null); setImportFile(null); await loadHistory();
+    } catch (e) { setIngestionError(e instanceof Error ? e.message : 'No se pudo confirmar la importación.'); } finally { setIngestionBusy(false); }
+  }
+  async function runSources() {
+    setIngestionBusy(true); setIngestionError('');
+    try {
+      const response = await fetch('/api/admin/ingestion/sources/run', { method: 'POST' });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error);
+      setSuccess(`Fuentes ejecutadas: ${result.imported || 0} borradores creados; ${result.duplicates || 0} duplicados omitidos.`);
+      await loadHistory();
+    } catch (e) { setIngestionError(e instanceof Error ? e.message : 'No se pudieron ejecutar las fuentes aprobadas.'); } finally { setIngestionBusy(false); }
+  }
   const visible = items.filter((item) => (filter === 'all' || (filter === 'urgent' ? getDeadline(item.closingDate).urgent && item.status === 'published' : filter === 'closed' ? item.status === 'closed' || getDeadline(item.closingDate).closed : item.status === filter)) && `${item.title} ${item.entity}`.toLowerCase().includes(search.toLowerCase()));
   return <div className="editor-app">
-    <header className="editor-header"><Link className="editor-brand" href="/">oportunia<span>EDITORIAL</span></Link><Link href="/" className="editor-back"><ArrowLeft size={16} /> Ver portal</Link>{editor && <button className="editor-secondary" onClick={async () => { await fetch('/api/auth/logout', { method: 'POST' }); window.location.reload(); }}><LogOut size={16} /> Salir</button>}</header>
-    {!editor ? <main className="editor-login"><div className="editor-icon"><ShieldCheck size={28} /></div><h1>Tu espacio editorial</h1><p>Información clara empieza con una buena revisión.</p>{!configured ? <div className="editor-notice"><h2>Configura el acceso seguro</h2><p>Copia <code>.env.example</code> a <code>.env.local</code> y completa <code>EDITOR_EMAIL</code>, <code>EDITOR_PASSWORD</code> y <code>SESSION_SECRET</code> (mínimo 32 caracteres). Reinicia el servidor.</p><p>El CMS permanece protegido hasta configurar estas credenciales.</p></div> : <form onSubmit={login}><label>Correo editorial<input name="email" type="email" required autoComplete="username" placeholder="editor@oportunia.pe" /></label><label>Contraseña<input name="password" type="password" required autoComplete="current-password" /></label>{error && <p role="alert" className="editor-error">{error}</p>}<button className="editor-primary" disabled={busy}>{busy ? 'Ingresando…' : 'Ingresar al CMS'}</button></form>}</main> : <main className="editor-main">
+    <header className="editor-header"><Link className="editor-brand" href="/">oportunia<span>EDITORIAL</span></Link><Link href="/" className="editor-back"><ArrowLeft size={16} /> Ver portal</Link>{access !== 'unauthenticated' && <button className="editor-secondary" onClick={async () => { const { error: authError } = await authClient.signOut(); if (authError) setError(authError.message || 'No se pudo cerrar sesión.'); else window.location.reload(); }}><LogOut size={16} /> Salir</button>}</header>
+    {!editor ? <main className="editor-login"><div className="editor-icon"><ShieldCheck size={28} /></div><h1>Tu espacio editorial</h1><p>Información clara empieza con una buena revisión.</p>{access === 'forbidden' ? <div className="editor-notice"><h2>Cuenta sin permiso editorial</h2><p>Tu sesión es válida, pero esta cuenta no tiene el rol de administrador. Pedí a un administrador que habilite tu perfil de aplicación.</p></div> : <form onSubmit={login}><label>Correo editorial<input name="email" type="email" required autoComplete="username" placeholder="editor@oportunia.pe" /></label><label>Contraseña<input name="password" type="password" required autoComplete="current-password" /></label>{error && <p role="alert" className="editor-error">{error}</p>}<button className="editor-primary" disabled={busy}>{busy ? 'Ingresando…' : 'Ingresar al CMS'}</button></form>}</main> : <main className="editor-main">
       <div className="editor-title"><div><p className="editor-eyebrow">PANEL EDITORIAL</p><h1>Convocatorias</h1><p>Publica con claridad. Revisa a tiempo.</p></div><button className="editor-primary" onClick={() => { setDraft(empty()); setError(''); setPreview(false); setSuccess(''); }}><Plus size={18} /> Nueva convocatoria</button></div>
       <div className="editor-stats"><div><span>Total de fichas</span><strong>{items.length}</strong></div><div><span>Publicadas y vigentes</span><strong>{items.filter((i) => i.status === 'published' && !getDeadline(i.closingDate).closed).length}</strong></div><div><span>Cierran pronto</span><strong>{items.filter((i) => i.status === 'published' && getDeadline(i.closingDate).urgent).length}</strong></div><div><span>Borradores</span><strong>{items.filter((i) => i.status === 'draft').length}</strong></div></div>
+      <section className="editor-ingestion" aria-labelledby="ingestion-title"><div className="editor-ingestion-heading"><div><p className="editor-eyebrow">INGESTA CONTROLADA</p><h2 id="ingestion-title">Carga y fuentes oficiales</h2><p>Todo ingreso queda como borrador para revisión editorial.</p></div><div className="editor-ingestion-actions"><a className="editor-secondary" href="/api/admin/ingestion/template"><Download size={16} /> Plantilla Excel</a><button className="editor-secondary" type="button" onClick={runSources} disabled={ingestionBusy}><Play size={16} /> Ejecutar fuentes</button><button className="editor-secondary" type="button" onClick={loadHistory} disabled={ingestionBusy}><History size={16} /> Actualizar historial</button></div></div><form className="editor-import-form" onSubmit={previewImport}><label>Archivo .xlsx<input name="file" type="file" accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.xlsx" required /></label><button className="editor-primary" disabled={ingestionBusy}><Upload size={16} /> {ingestionBusy ? 'Procesando…' : 'Validar archivo'}</button></form>{ingestionError && <p className="editor-error" role="alert">{ingestionError}</p>}{importPreview && <div className="editor-import-preview" aria-live="polite"><div><strong>Vista previa</strong><span>{importPreview.valid} válidas · {importPreview.invalid} inválidas · {importPreview.duplicates} duplicadas</span></div>{importPreview.issues.length > 0 && <ul>{importPreview.issues.slice(0, 8).map((issue) => <li key={`${issue.rowNumber}-${issue.reason || issue.errors?.join('-')}`}><AlertTriangle size={15} /> Fila {issue.rowNumber}: {issue.errors?.join(' ') || issue.reason || 'duplicada'}{issue.normalizedOfficialUrl ? ` (${issue.normalizedOfficialUrl})` : ''}</li>)}</ul>}<button className="editor-primary" type="button" onClick={confirmImport} disabled={ingestionBusy || importPreview.valid === 0}>Confirmar e importar borradores</button></div>}{history.length > 0 && <div className="editor-ingestion-history"><h3>Últimas ejecuciones</h3>{history.slice(0, 6).map((run) => <article key={run.id}><div><strong>{run.trigger === 'excel' ? 'Archivo Excel' : 'Fuentes oficiales'}</strong><span>{new Date(run.startedAt).toLocaleString('es-PE')}</span></div><p>{run.status} · {run.importedCount || 0} importadas · {run.invalidCount || 0} inválidas · {run.duplicateCount || 0} duplicadas</p>{run.error && <small>{run.error}</small>}</article>)}</div>}</section>
       {success && <p role="status" className="editor-success">{success}</p>}
       <div className="editor-tools"><label className="editor-search"><Search size={18} /><input aria-label="Buscar fichas" placeholder="Buscar por entidad o puesto…" value={search} onChange={(e) => setSearch(e.target.value)} /></label><select aria-label="Filtrar por estado" value={filter} onChange={(e) => setFilter(e.target.value)}><option value="all">Todos los estados</option><option value="published">Publicadas</option><option value="urgent">Cierran pronto</option><option value="draft">Borradores</option><option value="scheduled">Programadas</option><option value="closed">Cerradas / vencidas</option></select></div>
       <div className="editor-list">{visible.length === 0 && <div className="editor-empty"><FileText /><h2>No encontramos fichas</h2><p>Prueba otro filtro o crea una convocatoria.</p></div>}{visible.map((item) => <article key={item.id} className="editor-row"><div><small>{item.entity} {item.isDemo && ' · DEMOSTRACIÓN'}</small><h2>{item.title}</h2><p>{item.region} · {item.type} · {item.vacancies} vacantes</p></div><div className="editor-row-status"><span>{getDeadline(item.closingDate).closed ? 'Vencida' : statusNames[item.status]}</span><small>{getDeadline(item.closingDate).label}</small>{item.verifiedAt && <small>Revisada: {new Date(item.verifiedAt).toLocaleDateString('es-PE')}</small>}</div><button className="editor-secondary" aria-label={`Editar ${item.title}`} onClick={() => { setDraft({ ...item, verified: false }); setPreview(false); setError(''); }}><Pencil size={16} /> Editar</button></article>)}</div>

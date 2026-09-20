@@ -1,0 +1,20 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1789860707440,
+      "tag": "0000_initial_neon_schema",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1789860711598,
+      "tag": "0001_add_ingestion_and_admin_tables",
+      "breakpoints": true
+    }
+  ]
+}

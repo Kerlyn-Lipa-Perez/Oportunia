@@ -1,37 +1,47 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
-import { cookies } from 'next/headers';
+import 'server-only';
 
-const COOKIE = 'oportunia-editor';
-export function authConfigured() { return !!(process.env.EDITOR_EMAIL && process.env.EDITOR_PASSWORD && process.env.SESSION_SECRET && process.env.SESSION_SECRET.length >= 32); }
-function same(a: string, b: string) { const aa = Buffer.from(a); const bb = Buffer.from(b); return aa.length === bb.length && timingSafeEqual(aa, bb); }
-function sign(payload: string) { return createHmac('sha256', process.env.SESSION_SECRET || '').update(payload).digest('base64url'); }
-export function checkCredentials(email: string, password: string) { return authConfigured() && same(email.trim().toLowerCase(), process.env.EDITOR_EMAIL!.toLowerCase()) && same(password, process.env.EDITOR_PASSWORD!); }
-export async function createSession() {
-  if (!authConfigured()) throw new Error('CMS no configurado');
-  const payload = Buffer.from(JSON.stringify({ email: process.env.EDITOR_EMAIL, exp: Date.now() + 8 * 3600000 })).toString('base64url');
-  (await cookies()).set(COOKIE, `${payload}.${sign(payload)}`, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', maxAge: 8 * 3600, path: '/' });
+import { createNeonAuth } from '@neondatabase/auth/next/server';
+import { eq } from 'drizzle-orm';
+import { db } from '@/lib/db';
+import { appProfiles } from '@/lib/db/schema';
+import { resolveAdminAccess } from '@/lib/authz';
+import type { AdminAccess } from '@/lib/authz';
+
+export { authorizationStatus, resolveAdminAccess, type AdminAccess, type SessionIdentity } from '@/lib/authz';
+
+export const auth = createNeonAuth({
+  baseUrl: process.env.NEON_AUTH_BASE_URL!,
+  cookies: { secret: process.env.NEON_AUTH_COOKIE_SECRET! },
+});
+
+async function findApplicationRole(userId: string): Promise<string | null> {
+  const profile = await db
+    .select({ role: appProfiles.role })
+    .from(appProfiles)
+    .where(eq(appProfiles.userId, userId))
+    .limit(1);
+
+  return profile[0]?.role ?? null;
 }
-export async function getEditor(): Promise<string | null> {
-  if (!authConfigured()) return null;
-  const token = (await cookies()).get(COOKIE)?.value;
-  if (!token) return null;
-  const [payload, signature] = token.split('.');
-  if (!payload || !signature || !same(signature, sign(payload))) return null;
-  try { const data = JSON.parse(Buffer.from(payload, 'base64url').toString()); return data.exp > Date.now() && data.email === process.env.EDITOR_EMAIL ? data.email : null; } catch { return null; }
+
+/** Central DAL check for Server Components and route handlers. */
+export async function requireAdmin(): Promise<AdminAccess> {
+  const { data: session } = await auth.getSession();
+  return resolveAdminAccess(session?.user ?? null, findApplicationRole);
 }
-export async function clearSession() { (await cookies()).delete(COOKIE); }
+
+/**
+ * Route handlers use this explicit entry point so authorization remains next
+ * to the protected mutation instead of relying on the client UI.
+ */
+export async function requireAdminFromRequest(_request: Request): Promise<AdminAccess> {
+  return requireAdmin();
+}
+
+/** CSRF check for same-origin editor mutations; authentication is separate. */
 export function validOrigin(request: Request) {
-  const expected = process.env.NEXT_PUBLIC_SITE_URL ? new URL(process.env.NEXT_PUBLIC_SITE_URL).origin : new URL(request.url).origin;
+  const expected = process.env.NEXT_PUBLIC_SITE_URL
+    ? new URL(process.env.NEXT_PUBLIC_SITE_URL).origin
+    : new URL(request.url).origin;
   return request.headers.get('origin') === expected;
-}
-
-const attempts = new Map<string, { count: number; until: number }>();
-export function loginRateLimited(email: string) {
-  for (const [oldKey, value] of attempts) if (value.until < Date.now()) attempts.delete(oldKey);
-  const key = email.trim().toLowerCase();
-  const entry = attempts.get(key);
-  if (!entry && attempts.size >= 1000) return true;
-  if (!entry || entry.until < Date.now()) { attempts.set(key, { count: 1, until: Date.now() + 15 * 60000 }); return false; }
-  entry.count++;
-  return entry.count > 10;
 }

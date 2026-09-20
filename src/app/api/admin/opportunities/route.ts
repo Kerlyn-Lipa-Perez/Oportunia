@@ -1,17 +1,19 @@
 import { randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
-import { getEditor, validOrigin } from '@/lib/auth';
+import { authorizationStatus, requireAdminFromRequest, validOrigin } from '@/lib/auth';
 import { getAllOpportunities, getOpportunityById, saveOpportunity } from '@/lib/repository';
 import { validateOpportunity } from '@/lib/opportunities';
 import type { Opportunity } from '@/lib/types';
 export const runtime = 'nodejs';
-export async function GET() {
-  if (!await getEditor()) return NextResponse.json({ error: 'Acceso no autorizado.' }, { status: 401 });
+export async function GET(request: Request) {
+  const access = await requireAdminFromRequest(request);
+  if (access.kind !== 'admin') return NextResponse.json({ error: 'Acceso no autorizado.' }, { status: authorizationStatus(access) });
   return NextResponse.json(await getAllOpportunities());
 }
 export async function POST(request: Request) {
-  const editor = await getEditor();
-  if (!editor) return NextResponse.json({ error: 'Acceso no autorizado.' }, { status: 401 });
+  const access = await requireAdminFromRequest(request);
+  if (access.kind !== 'admin') return NextResponse.json({ error: 'Acceso no autorizado.' }, { status: authorizationStatus(access) });
+  const editor = access.user.email || access.user.id;
   if (!validOrigin(request)) return NextResponse.json({ error: 'Origen no permitido.' }, { status: 403 });
   const body = await request.text();
   if (body.length > 60000) return NextResponse.json({ error: 'La ficha excede el tamaño permitido.' }, { status: 413 });
