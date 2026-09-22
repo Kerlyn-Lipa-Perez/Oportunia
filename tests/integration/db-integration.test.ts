@@ -1,57 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { eq } from 'drizzle-orm';
-import type { Opportunity } from '../src/lib/types';
-import {
-  getAllOpportunities,
-  getPublicOpportunities,
-  getOpportunityBySlug,
-  getOpportunityById,
-  saveOpportunity,
-  recordEvent,
-} from '../src/lib/repository';
-import { db } from '../src/lib/db/index';
-import { opportunities, events } from '../src/lib/db/schema';
+import type { Opportunity } from '../../src/lib/types';
+import { requireIsolatedDatabaseUrl } from './database-test-guard';
 
-// Load DATABASE_URL from the repo .env (gitignored, holds live Neon
-// credentials) when it is not already set in the environment — the same
-// approach drizzle-kit uses. The value is never printed, logged, or written
-// anywhere; it only lands in process.env.
-function loadDotEnvFile(): void {
-  if (process.env.DATABASE_URL) return;
-  let raw: string;
-  try {
-    raw = readFileSync(join(process.cwd(), '.env'), 'utf8');
-  } catch {
-    return;
-  }
-  for (const line of raw.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const withoutExport = trimmed.startsWith('export ')
-      ? trimmed.slice('export '.length).trimStart()
-      : trimmed;
-    const eqIndex = withoutExport.indexOf('=');
-    if (eqIndex === -1) continue;
-    const key = withoutExport.slice(0, eqIndex).trim();
-    if (key !== 'DATABASE_URL') continue;
-    let value = withoutExport.slice(eqIndex + 1).trim();
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-    if (value) process.env.DATABASE_URL = value;
-  }
-}
+const testDatabaseUrl = requireIsolatedDatabaseUrl(process.env);
 
-loadDotEnvFile();
-
-const hasDatabaseUrl = !!process.env.DATABASE_URL;
-const skipReason = 'DATABASE_URL is not set — skipping live database tests';
+// Repository code reads DATABASE_URL. It must only ever receive the explicit
+// isolated test URL supplied by this command.
+process.env.DATABASE_URL = testDatabaseUrl;
 
 function buildFixture(overrides: Partial<Opportunity> & { id: string; slug: string }): Opportunity {
   return {
@@ -80,7 +36,26 @@ function buildFixture(overrides: Partial<Opportunity> & { id: string; slug: stri
   };
 }
 
-test('db integration: repository live round-trip', { skip: hasDatabaseUrl ? undefined : skipReason }, async (t) => {
+test('db integration: repository isolated round-trip', async (t) => {
+  const [
+    { eq },
+    {
+      getAllOpportunities,
+      getPublicOpportunities,
+      getOpportunityBySlug,
+      getOpportunityById,
+      saveOpportunity,
+      recordEvent,
+    },
+    { db },
+    { opportunities, events },
+  ] = await Promise.all([
+    import('drizzle-orm'),
+    import('../../src/lib/repository'),
+    import('../../src/lib/db/index'),
+    import('../../src/lib/db/schema'),
+  ]);
+
   const tag = `__test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const pub = buildFixture({ id: `${tag}-pub`, slug: `${tag}-pub` });
   const draft = buildFixture({

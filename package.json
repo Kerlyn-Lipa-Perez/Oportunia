@@ -2,13 +2,15 @@
   "name": "oportunia",
   "version": "0.1.0",
   "private": true,
-  "packageManager": "pnpm@11.18.0",
+  "packageManager": "pnpm@12.5.1",
   "scripts": {
     "dev": "next dev --hostname 127.0.0.1",
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test tests/*.test.ts"
+    "test": "tsx --test tests/*.test.ts",
+    "test:integration": "tsx --test tests/integration/*.test.ts",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@neon/config": "^1.7.1",
