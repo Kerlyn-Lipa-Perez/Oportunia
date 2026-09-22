@@ -15,6 +15,20 @@
       "when": 1789860711598,
       "tag": "0001_add_ingestion_and_admin_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789937654933,
+      "tag": "0002_add_social_campaigns",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790025253609,
+      "tag": "0003_add_privacy_first_analytics",
+      "breakpoints": true
     }
   ]
 }

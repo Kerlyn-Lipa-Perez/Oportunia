@@ -1,4 +1,5 @@
-import { boolean, integer, pgTable, text } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+import { boolean, check, index, integer, pgTable, text } from 'drizzle-orm/pg-core';
 
 export const opportunities = pgTable('opportunities', {
   id: text('id').primaryKey(),
@@ -6,16 +7,30 @@ export const opportunities = pgTable('opportunities', {
   data: text('data').notNull(),
 });
 
-export const events = pgTable('events', {
-  id: text('id').primaryKey(),
-  name: text('name').notNull(),
-  opportunityId: text('opportunity_id'),
-  source: text('source'),
-  medium: text('medium'),
-  campaign: text('campaign'),
-  content: text('content'),
-  createdAt: text('created_at').notNull(),
-});
+export const events = pgTable(
+  'events',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    opportunityId: text('opportunity_id'),
+    source: text('source'),
+    medium: text('medium'),
+    campaign: text('campaign'),
+    content: text('content'),
+    sessionId: text('session_id'),
+    // Reserved for a future consent-aware analytics integration. The current
+    // public API never accepts it because advertising consent is not analytics consent.
+    visitorId: text('visitor_id'),
+    engagementMs: integer('engagement_ms'),
+    createdAt: text('created_at').notNull(),
+  },
+  (table) => [
+    index('events_content_name_created_at_idx').on(table.content, table.name, table.createdAt),
+    index('events_content_session_created_at_idx').on(table.content, table.sessionId, table.createdAt),
+    index('events_session_name_created_at_idx').on(table.sessionId, table.name, table.createdAt),
+    check('events_engagement_ms_check', sql`${table.engagementMs} is null or ${table.engagementMs} between 0 and 60000`),
+  ],
+);
 
 export const settings = pgTable('settings', {
   key: text('key').primaryKey(),
@@ -66,3 +81,31 @@ export const opportunityProvenance = pgTable('opportunity_provenance', {
   ingestionRunId: text('ingestion_run_id').references(() => ingestionRuns.id),
   capturedAt: text('captured_at').notNull(),
 });
+
+export const socialCampaigns = pgTable(
+  'social_campaigns',
+  {
+    id: text('id').primaryKey(),
+    opportunityId: text('opportunity_id').notNull().references(() => opportunities.id),
+    platform: text('platform').notNull().default('tiktok'),
+    code: text('code').notNull().unique(),
+    hook: text('hook').notNull(),
+    script: text('script').notNull(),
+    coverText: text('cover_text').notNull(),
+    caption: text('caption').notNull(),
+    publishedUrl: text('published_url'),
+    publishedAt: text('published_at'),
+    status: text('status').notNull().default('draft'),
+    reviewer: text('reviewer'),
+    approvedAt: text('approved_at'),
+    failureReason: text('failure_reason'),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => [
+    index('social_campaigns_opportunity_id_idx').on(table.opportunityId),
+    index('social_campaigns_status_idx').on(table.status),
+    check('social_campaigns_platform_check', sql`${table.platform} = 'tiktok'`),
+    check('social_campaigns_status_check', sql`${table.status} in ('draft', 'approved', 'queued', 'published', 'failed')`),
+  ],
+);
