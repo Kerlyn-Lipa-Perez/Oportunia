@@ -41,6 +41,7 @@ test('ingestion and authorization tables retain roles, source configuration, run
   const profileColumns = getColumns(appProfiles);
   assert.ok(profileColumns.userId, 'app profiles should use the Neon Auth user id as primary key');
   assert.ok(profileColumns.role, 'app profiles should retain the application role');
+  assert.ok(profileColumns.suspended, 'app profiles should fail closed while Neon Auth suspension is synchronized');
 
   const sourceColumns = getColumns(approvedSources);
   assert.ok(sourceColumns.id);

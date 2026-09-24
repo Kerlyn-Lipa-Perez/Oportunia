@@ -4,10 +4,10 @@ import { createNeonAuth, type NeonAuth } from '@neondatabase/auth/next/server';
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { appProfiles } from '@/lib/db/schema';
-import { resolveAdminAccess } from '@/lib/authz';
-import type { AdminAccess } from '@/lib/authz';
+import { resolveAdminAccess, resolveEditorialAccess } from '@/lib/authz';
+import type { AdminAccess, EditorialAccess } from '@/lib/authz';
 
-export { authorizationStatus, resolveAdminAccess, type AdminAccess, type SessionIdentity } from '@/lib/authz';
+export { authorizationStatus, isEditorialAccess, resolveAdminAccess, resolveEditorialAccess, type AdminAccess, type EditorialAccess, type SessionIdentity } from '@/lib/authz';
 
 export const auth: NeonAuth = new Proxy({} as NeonAuth, {
   get(_target, prop) {
@@ -51,20 +51,26 @@ export function getAuth(): NeonAuth {
   return _auth;
 }
 
-async function findApplicationRole(userId: string): Promise<string | null> {
+async function findApplicationProfile(userId: string) {
   const profile = await db
-    .select({ role: appProfiles.role })
+    .select({ role: appProfiles.role, suspended: appProfiles.suspended })
     .from(appProfiles)
     .where(eq(appProfiles.userId, userId))
     .limit(1);
 
-  return profile[0]?.role ?? null;
+  return profile[0] ?? null;
 }
 
 /** Central DAL check for Server Components and route handlers. */
 export async function requireAdmin(): Promise<AdminAccess> {
   const { data: session } = await getAuth().getSession();
-  return resolveAdminAccess(session?.user ?? null, findApplicationRole);
+  return resolveAdminAccess(session?.user ?? null, findApplicationProfile);
+}
+
+/** Editorial DAL check: both admins and editors can operate content. */
+export async function requireEditorial(): Promise<EditorialAccess> {
+  const { data: session } = await getAuth().getSession();
+  return resolveEditorialAccess(session?.user ?? null, findApplicationProfile);
 }
 
 /**
@@ -75,10 +81,27 @@ export async function requireAdminFromRequest(_request: Request): Promise<AdminA
   return requireAdmin();
 }
 
+export async function requireEditorialFromRequest(_request: Request): Promise<EditorialAccess> {
+  return requireEditorial();
+}
+
 /** CSRF check for same-origin editor mutations; authentication is separate. */
 export function validOrigin(request: Request) {
   const expected = process.env.NEXT_PUBLIC_SITE_URL
     ? new URL(process.env.NEXT_PUBLIC_SITE_URL).origin
     : new URL(request.url).origin;
   return request.headers.get('origin') === expected;
+}
+
+/** Same-origin validation for read requests where browsers may omit Origin. */
+export function validReadOrigin(request: Request) {
+  if (validOrigin(request)) return true;
+  const expected = process.env.NEXT_PUBLIC_SITE_URL
+    ? new URL(process.env.NEXT_PUBLIC_SITE_URL).origin
+    : new URL(request.url).origin;
+  const referer = request.headers.get('referer');
+  if (referer) {
+    try { return new URL(referer).origin === expected; } catch { return false; }
+  }
+  return request.headers.get('sec-fetch-site') === 'same-origin';
 }

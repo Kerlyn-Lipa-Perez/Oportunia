@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { authorizationStatus, requireAdminFromRequest } from '@/lib/auth';
+import { authorizationStatus, isEditorialAccess, requireEditorialFromRequest, validOrigin } from '@/lib/auth';
 import { previewExcelImport } from '@/lib/ingestion/admin';
 
 export const runtime = 'nodejs';
@@ -15,8 +15,9 @@ async function workbookFromRequest(request: Request): Promise<ArrayBuffer> {
 }
 
 export async function POST(request: Request) {
-  const access = await requireAdminFromRequest(request);
-  if (access.kind !== 'admin') return NextResponse.json({ error: 'Acceso no autorizado.' }, { status: authorizationStatus(access) });
+  const access = await requireEditorialFromRequest(request);
+  if (!isEditorialAccess(access)) return NextResponse.json({ error: 'Acceso no autorizado.' }, { status: authorizationStatus(access) });
+  if (!validOrigin(request)) return NextResponse.json({ error: 'Origen no permitido.' }, { status: 403 });
   try {
     return NextResponse.json(await previewExcelImport(await workbookFromRequest(request)));
   } catch (error) {

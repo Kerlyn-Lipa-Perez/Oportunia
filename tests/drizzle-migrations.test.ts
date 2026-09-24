@@ -25,4 +25,8 @@ test('ingestion schema is represented by a versioned Drizzle migration', () => {
   assert.match(migrationSql, /CONSTRAINT "opportunity_provenance_normalized_official_url_unique" UNIQUE\("normalized_official_url"\)/);
   assert.match(migrationSql, /REFERENCES "public"\."approved_sources"\("id"\)/);
   assert.match(migrationSql, /REFERENCES "public"\."ingestion_runs"\("id"\)/);
+  assert.match(migrationSql, /ADD COLUMN "suspended" boolean DEFAULT false NOT NULL/);
+  assert.match(migrationSql, /app_profiles_role_check/);
+  assert.match(migrationSql, /ensure_active_admin_remains/);
+  assert.match(migrationSql, /app_profiles_preserve_active_admin/);
 });

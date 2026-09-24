@@ -43,3 +43,26 @@ export function resolveExternalBaseUrl(environment: Environment): string {
   url.hash = '';
   return url.toString().replace(/\/$/, '');
 }
+
+export function resolveAdminE2eCredentials(environment: Environment) {
+  const values = {
+    adminEmail: environment.E2E_ADMIN_EMAIL?.trim(),
+    adminPassword: environment.E2E_ADMIN_PASSWORD,
+    editorEmail: environment.E2E_EDITOR_EMAIL?.trim(),
+    editorPassword: environment.E2E_EDITOR_PASSWORD,
+  };
+  const missing = [
+    ['E2E_ADMIN_EMAIL', values.adminEmail],
+    ['E2E_ADMIN_PASSWORD', values.adminPassword],
+    ['E2E_EDITOR_EMAIL', values.editorEmail],
+    ['E2E_EDITOR_PASSWORD', values.editorPassword],
+  ].find(([, value]) => !value);
+  if (missing) throw new Error(`${missing[0]} is required for the admin account-management E2E.`);
+  if (!/^\S+@\S+\.\S+$/.test(values.adminEmail!) || !/^\S+@\S+\.\S+$/.test(values.editorEmail!)) {
+    throw new Error('E2E admin and editor emails must be valid email addresses.');
+  }
+  if (values.editorPassword!.length < 12) {
+    throw new Error('E2E_EDITOR_PASSWORD must have at least 12 characters.');
+  }
+  return values as { adminEmail: string; adminPassword: string; editorEmail: string; editorPassword: string };
+}

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { authorizationStatus, requireAdminFromRequest, validOrigin } from '@/lib/auth';
+import { authorizationStatus, isEditorialAccess, requireEditorialFromRequest, validOrigin } from '@/lib/auth';
 import {
   createSocialCampaign,
   listSocialCampaigns,
@@ -44,8 +44,8 @@ function optionalString(input: Record<string, unknown>, key: string): string | u
 }
 
 export async function GET(request: Request) {
-  const access = await requireAdminFromRequest(request);
-  if (access.kind !== 'admin') {
+  const access = await requireEditorialFromRequest(request);
+  if (!isEditorialAccess(access)) {
     return NextResponse.json({ error: 'Acceso no autorizado.' }, { status: authorizationStatus(access) });
   }
   const requestedStatus = new URL(request.url).searchParams.get('status');
@@ -60,8 +60,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const access = await requireAdminFromRequest(request);
-  if (access.kind !== 'admin') {
+  const access = await requireEditorialFromRequest(request);
+  if (!isEditorialAccess(access)) {
     return NextResponse.json({ error: 'Acceso no autorizado.' }, { status: authorizationStatus(access) });
   }
   if (!validOrigin(request)) return NextResponse.json({ error: 'Origen no permitido.' }, { status: 403 });
@@ -86,8 +86,8 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const access = await requireAdminFromRequest(request);
-  if (access.kind !== 'admin') {
+  const access = await requireEditorialFromRequest(request);
+  if (!isEditorialAccess(access)) {
     return NextResponse.json({ error: 'Acceso no autorizado.' }, { status: authorizationStatus(access) });
   }
   if (!validOrigin(request)) return NextResponse.json({ error: 'Origen no permitido.' }, { status: 403 });

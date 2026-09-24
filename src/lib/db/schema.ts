@@ -39,12 +39,20 @@ export const settings = pgTable('settings', {
 
 // Neon Auth owns identities and credentials. This table only assigns an
 // application role to the stable Neon Auth user id.
-export const appProfiles = pgTable('app_profiles', {
-  userId: text('user_id').primaryKey(),
-  role: text('role').notNull(),
-  createdAt: text('created_at').notNull(),
-  updatedAt: text('updated_at').notNull(),
-});
+export const appProfiles = pgTable(
+  'app_profiles',
+  {
+    userId: text('user_id').primaryKey(),
+    role: text('role').notNull(),
+    suspended: boolean('suspended').notNull().default(false),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => [
+    index('app_profiles_role_suspended_idx').on(table.role, table.suspended),
+    check('app_profiles_role_check', sql`${table.role} in ('admin', 'editor')`),
+  ],
+);
 
 // A source is an explicitly approved URL, never a domain-wide crawl target.
 export const approvedSources = pgTable('approved_sources', {

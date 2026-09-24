@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
-import { authorizationStatus, requireAdminFromRequest } from '@/lib/auth';
+import { authorizationStatus, isEditorialAccess, requireEditorialFromRequest } from '@/lib/auth';
 import { createOpportunityTemplate } from '@/lib/ingestion/excel';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
-  const access = await requireAdminFromRequest(request);
-  if (access.kind !== 'admin') return NextResponse.json({ error: 'Acceso no autorizado.' }, { status: authorizationStatus(access) });
+  const access = await requireEditorialFromRequest(request);
+  if (!isEditorialAccess(access)) return NextResponse.json({ error: 'Acceso no autorizado.' }, { status: authorizationStatus(access) });
   const file = createOpportunityTemplate();
   return new NextResponse(new Uint8Array(file), {
     headers: {
