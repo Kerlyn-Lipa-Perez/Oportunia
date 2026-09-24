@@ -85,4 +85,25 @@ test('production runbook keeps external DNS, Vercel and CMP work explicit', () =
   assert.match(runbook, /AdSense Ready/i);
   assert.match(runbook, /SEO_INDEXING_ENABLED=false/);
   assert.match(runbook, /ALLOW_DATABASE_TESTS=true/);
+  assert.match(runbook, /Search Console/i);
+  assert.match(runbook, /30 oportunidades/i);
+  assert.match(runbook, /10 guías/i);
+  assert.match(runbook, /dos semanas/i);
+  assert.match(runbook, /cero contenido demo/i);
+  assert.match(runbook, /E2E_ADMIN_EMAIL/);
+  assert.match(runbook, /0000.*0001.*0002.*0003.*0004/s);
+  assert.match(runbook, /producción.*después.*E2E/is);
+});
+
+test('admin provisioning runbook preserves the two-layer role and branch-first order', () => {
+  const runbook = readFileSync('docs/neon-admin-provisioning.md', 'utf8');
+
+  assert.match(runbook, /app_profiles.*antes.*Neon Auth/is);
+  assert.match(runbook, /admin.*Neon.*admin/is);
+  assert.match(runbook, /editor.*Neon.*user/is);
+  assert.match(runbook, /12 caracteres/i);
+  assert.match(runbook, /último administrador activo/i);
+  assert.match(runbook, /revoc/i);
+  assert.match(runbook, /rama aislada/i);
+  assert.match(runbook, /no.*(borrado|eliminar).*suplantación.*reset/is);
 });

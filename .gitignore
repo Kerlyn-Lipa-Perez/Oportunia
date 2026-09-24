@@ -11,3 +11,5 @@ playwright-report/
 .pnpm-store/
 .atl/
 .neon
+output
+.vercel

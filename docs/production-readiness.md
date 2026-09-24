@@ -1,60 +1,95 @@
 # Activar producción sin abrir gates antes de tiempo
 
-El repositorio mantiene SEO y AdSense cerrados por defecto. El código resuelve canonical, redirects y validación; DNS, el dominio de Vercel, AdSense y la CMP requieren configuración externa verificada.
+Producción permanece cerrada por defecto: SEO no indexa y AdSense no carga hasta que datos, dominio, consentimiento y medición estén verificados. La aplicación ya implementa los controles; Neon, Vercel y las consolas de Google requieren intervención humana.
 
-## Ruta rápida
+## Ruta de salida
 
-1. Agregá `oportuniape.com` al proyecto correcto en Vercel y configurá los registros DNS que Vercel indique.
-2. Verificá que `https://oportunia-six.vercel.app/<ruta>` responda con `308` hacia `https://oportuniape.com/<ruta>` y que el certificado del dominio canónico sea válido.
-3. Desplegá con `NEXT_PUBLIC_SITE_URL=https://oportuniape.com` y mantené `SEO_INDEXING_ENABLED=false` hasta completar la lista de verificación.
-4. Configurá AdSense, la propiedad de GA4 y la CMP certificada de Google fuera del repositorio. Recién después de pasar la evaluación interna y tener el sitio marcado como AdSense Ready, cargá los IDs reales y configurá `ADSENSE_READINESS_CONFIRMED=true`; `ADSENSE_ENABLED=true` sigue siendo el kill switch operativo.
+1. Conservá un snapshot de `production` y cloná una rama Neon aislada.
+2. Confirmá el baseline `0000` y aplicá `0001`, `0002`, `0003` y `0004` en orden.
+3. Ejecutá integración y el E2E externo completo contra un preview conectado a esa rama.
+4. Promové la cuenta raíz en la rama siguiendo [el orden seguro](./neon-admin-provisioning.md).
+5. Recién después de aprobar el E2E, repetí migración y promoción en producción.
+6. Configurá dominio, CMP, la propiedad de GA4, AdSense y Search Console; abrí cada gate sólo cuando su checklist esté completo.
 
-## Configuración
+No borres los usuarios fixture ni la rama aislada hasta conservar la evidencia. Después, eliminá los fixtures y la rama de prueba; mantené el snapshot según la política de recuperación.
 
-| Tema | Decisión |
+## Variables de Vercel
+
+| Variable | Regla |
 |---|---|
-| Canonical | Sólo `https://oportuniape.com`; producción nunca deriva canonical desde el hostname de Vercel. |
-| Redirect | `next.config.ts` hace match exacto del host legado. La asociación de dominios y DNS siguen siendo tareas de Vercel. |
-| SEO | `SEO_INDEXING_ENABLED=true` funciona únicamente en producción con la URL canónica configurada. Cualquier otro estado bloquea robots y vacía sitemap. |
-| AdSense | Requiere `ADSENSE_ENABLED=true`, `ADSENSE_READINESS_CONFIRMED=true`, un `ADSENSE_PUBLISHER_ID=pub-...` válido y un slot numérico permitido. `ADSENSE_SLOT_CATALOG_END` corresponde al cierre del catálogo y `ADSENSE_SLOT_DETAIL_BODY` al cuerpo de la ficha; cada posición se valida por separado y nunca comparte un ID de respaldo. La confirmación de readiness se configura sólo después de superar la evaluación interna y obtener AdSense Ready. No uses IDs de ejemplo. |
-| Consentimiento | La CMP certificada debe resolver la elección y adaptar su resultado al evento `oportunia:ads-consent`. El sitio no incluye un banner propio ni lo considera reemplazo de la CMP. |
-| ads.txt | Devuelve `404` hasta que AdSense esté habilitado, readiness esté confirmado y exista un publisher válido. |
-| Analítica | `NEXT_PUBLIC_GA_MEASUREMENT_ID` acepta únicamente el ID `G-...` real de la propiedad de GA4. Vacío o inválido deshabilita la integración. El script y los `page_view` se cargan sólo después del evento de consentimiento concedido; rechazo, ausencia, error o revocación cierran el gate. Si el tag ya fue cargado, la revocación activa `ga-disable-G-...` y actualiza `analytics_storage` a `denied` para impedir hits futuros; no borra datos ya procesados. Crear la propiedad, vincular GA4 con AdSense y validar la medición son tareas externas: no inventes IDs en el repositorio. |
+| `DATABASE_URL` | URL de la rama correspondiente; nunca apuntes un preview de aceptación a producción. |
+| `NEON_AUTH_BASE_URL` | Endpoint de Auth de la misma rama que `DATABASE_URL`. |
+| `NEON_AUTH_COOKIE_SECRET` | Secreto fuerte y exclusivo del entorno; no se versiona. |
+| `NEXT_PUBLIC_SITE_URL` | `https://oportuniape.com` en producción. |
+| `NEXT_PUBLIC_GA_MEASUREMENT_ID` | ID real `G-...`; vacío mantiene GA4 apagado. |
+| `SEO_INDEXING_ENABLED=false` | Estado obligatorio hasta aprobar el gate SEO. |
+| `ADSENSE_ENABLED` | Kill switch; `false` hasta aprobar el gate AdSense. |
+| `ADSENSE_READINESS_CONFIRMED` | `true` sólo con estado AdSense Ready y evaluación interna aprobada. |
+| `ADSENSE_PUBLISHER_ID` y slots | IDs reales; nunca valores de ejemplo. |
 
-## Lista de verificación
+## Gate SEO
 
-- [ ] `oportuniape.com` resuelve por DNS y figura como dominio verificado en Vercel.
-- [ ] El hostname `oportunia-six.vercel.app` redirige rutas y query strings al canónico.
-- [ ] Las páginas legales muestran sólo datos reales verificados.
-- [ ] `robots.txt` bloquea antes del lanzamiento y permite sólo después de activar el gate.
-- [ ] `sitemap.xml` no contiene demos ni oportunidades cerradas.
-- [ ] La cuenta de AdSense está lista y los IDs reales están cargados sólo en variables de entorno.
-- [ ] La evaluación interna fue aprobada y AdSense Ready está confirmado antes de configurar `ADSENSE_READINESS_CONFIRMED=true`.
-- [ ] La CMP certificada fue probada para conceder, rechazar y retirar consentimiento.
-- [ ] No existe una solicitud de `adsbygoogle.js` antes del consentimiento concedido.
-- [ ] La propiedad de GA4 usa el Measurement ID real en `NEXT_PUBLIC_GA_MEASUREMENT_ID` y no existe una solicitud de `gtag.js` ni eventos antes del consentimiento concedido.
-- [ ] El vínculo GA4 ↔ AdSense fue realizado y verificado en las consolas externas correspondientes.
+Activá `SEO_INDEXING_ENABLED=true` únicamente cuando:
 
-## E2E móvil del embudo TikTok
+- [ ] `oportuniape.com` resuelve por DNS, tiene certificado válido y figura verificado en Vercel.
+- [ ] El hostname legado redirige rutas y query strings al dominio canónico.
+- [ ] Portada, `/admin`, fichas, `robots.txt` y `sitemap.xml` responden de forma estable.
+- [ ] No existe ninguna URL productiva de localhost.
+- [ ] Las oportunidades cerradas están fuera del sitemap, la indexación y el marcado `JobPosting`.
+- [ ] Search Console verificó `oportuniape.com` y recibió el sitemap.
+- [ ] Las páginas legales contienen únicamente información real verificada.
 
-El arnés de Playwright sólo corre contra un entorno de prueba ya desplegado. No inicia Next localmente, no carga archivos `.env` y no consulta variables de base de datos.
+Con el gate cerrado, robots bloquea y el sitemap queda vacío.
 
-Prerequisitos:
+## Gate AdSense y analítica
 
-- La migración `drizzle/0002_add_social_campaigns.sql` está aplicada en el entorno externo.
-- Existe al menos una campaña TikTok `published` asociada a una oportunidad publicada, vigente, revisada y no demo. La ausencia de este fixture falla el test explícitamente.
-- `E2E_BASE_URL` o `PLAYWRIGHT_BASE_URL` apunta al origen HTTP(S) externo del entorno; localhost y loopback se rechazan.
-- El browser de Playwright para Chromium ya está instalado en la máquina que ejecuta la prueba. El repositorio no lo instala como parte del script.
+Activá `ADSENSE_READINESS_CONFIRMED=true` y luego `ADSENSE_ENABLED=true` únicamente cuando:
 
-En PowerShell:
+- [ ] La CMP certificada por Google fue probada al conceder, rechazar y retirar consentimiento.
+- [ ] GA4 y AdSense permanecen sin requests ni eventos antes de consentimiento válido.
+- [ ] La cuenta está en estado AdSense Ready y publisher, slots y `/ads.txt` usan IDs reales.
+- [ ] GA4 está enlazado con AdSense y la medición fue verificada en ambas consolas.
+- [ ] Hay cero contenido demo.
+- [ ] Hay al menos 30 oportunidades vigentes y revisadas.
+- [ ] Hay al menos 10 guías originales.
+- [ ] Se acumularon dos semanas de tráfico TikTok medido sin patrones sospechosos.
+- [ ] El E2E TikTok → ficha → fuente oficial fue aprobado.
+
+`ads.txt` responde `404` mientras publicidad o readiness estén apagados. El consentimiento se adapta al evento `oportunia:ads-consent`; rechazo, ausencia, error o revocación cierran GA4 y AdSense.
+
+## E2E contra el entorno migrado
+
+Playwright exige un origen HTTP(S) externo ya desplegado; rechaza localhost, no inicia Next y no carga `.env`. El preview debe usar la rama aislada migrada y contener una campaña TikTok publicada asociada a una oportunidad vigente, revisada y no demo.
+
+Configurá credenciales exclusivas de aceptación:
 
 ```powershell
 $env:E2E_BASE_URL='https://preview.example.test'
+$env:E2E_ADMIN_EMAIL='<admin-de-prueba>'
+$env:E2E_ADMIN_PASSWORD='<secreto>'
+$env:E2E_EDITOR_EMAIL='<editor-de-prueba>'
+$env:E2E_EDITOR_PASSWORD='<secreto-de-12-o-mas-caracteres>'
 pnpm test:e2e
 ```
 
-Para validar que Playwright puede cargar la configuración y descubrir el spec sin abrir un browser, usá `pnpm exec playwright test --list` con la misma variable definida.
+El recorrido administrativo valida login, logout, restauración de sesión, creación o reutilización del editor, acceso editorial, rechazo en `/api/admin/users`, cambio de rol, suspensión, reactivación y autoprotección del administrador. `pnpm exec playwright test --list` sólo valida configuración y descubrimiento; no sustituye el E2E.
 
-## Tests de base de datos
+## Integración de base de datos
 
-`pnpm test` nunca incluye integración. Para una rama Neon aislada, configurá `TEST_DATABASE_URL`, confirmá que no apunta a producción y ejecutá con `ALLOW_DATABASE_TESTS=true pnpm test:integration` (en PowerShell, definí ambas variables de entorno antes del comando). La integración nunca lee `.env` ni reutiliza `DATABASE_URL` implícitamente.
+`pnpm test` no incluye integración. Usá una rama Neon descartable y variables explícitas; el gate debe equivaler a `ALLOW_DATABASE_TESTS=true`:
+
+```powershell
+$env:TEST_DATABASE_URL='<url-directa-rama-aislada>'
+$env:ALLOW_DATABASE_TESTS='true'
+pnpm test:integration
+```
+
+La suite verifica el journal `0000`–`0004`, perfiles, restricciones de rol y protección transaccional del último administrador. Nunca uses una URL de producción como `TEST_DATABASE_URL`.
+
+## Evidencia antes de producción
+
+- [ ] Unitarias, rutas API, typecheck e integración están verdes; no se ejecuta build por la regla del proyecto.
+- [ ] E2E administrativo y TikTok están verdes sobre el preview migrado.
+- [ ] Se revisaron `/admin` y las páginas públicas en móvil y escritorio.
+- [ ] Se conservaron logs, capturas y referencia exacta de la rama/esquema verificado.
+- [ ] Los usuarios de prueba fueron eliminados sólo después de guardar la evidencia.
