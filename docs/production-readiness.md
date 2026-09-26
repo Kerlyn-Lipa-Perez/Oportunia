@@ -1,6 +1,6 @@
 # Activar producción sin abrir gates antes de tiempo
 
-Producción permanece cerrada por defecto: SEO no indexa y AdSense no carga hasta que datos, dominio, consentimiento y medición estén verificados. La aplicación ya implementa los controles; Neon, Vercel y las consolas de Google requieren intervención humana.
+Producción permanece cerrada por defecto: SEO no indexa y AdSense no carga hasta que datos, origen, consentimiento y medición estén verificados. La aplicación ya implementa los controles; Neon, Vercel y las consolas de Google requieren intervención humana.
 
 ## Ruta de salida
 
@@ -9,9 +9,19 @@ Producción permanece cerrada por defecto: SEO no indexa y AdSense no carga hast
 3. Ejecutá integración y el E2E externo completo contra un preview conectado a esa rama.
 4. Promové la cuenta raíz en la rama siguiendo [el orden seguro](./neon-admin-provisioning.md).
 5. Recién después de aprobar el E2E, repetí migración y promoción en producción.
-6. Configurá dominio, CMP, la propiedad de GA4, AdSense y Search Console; abrí cada gate sólo cuando su checklist esté completo.
+6. Recorré la ruta de consolas en 5 pasos y abrí cada gate sólo cuando su checklist esté completo.
 
 No borres los usuarios fixture ni la rama aislada hasta conservar la evidencia. Después, eliminá los fixtures y la rama de prueba; mantené el snapshot según la política de recuperación.
+
+## Ruta de consolas en 5 pasos
+
+Cada paso lo ejecuta una persona en la consola correspondiente y devuelve un único valor que la configuración consume; ningún valor se asume por adelantado.
+
+1. **Vercel** — desplegá la rama, definí `NEXT_PUBLIC_SITE_URL=https://oportunia-six.vercel.app` con ese origen exacto (https, en minúsculas y sin ruta) y promové el alias de producción.
+2. **CMP certificada** — en AdSense › Privacidad y mensajes, instalá una CMP certificada por Google y guardá la URL https de su snippet en `NEXT_PUBLIC_CMP_SCRIPT_SRC`. Sin snippet https válido no hay señales de consentimiento y todos los gates permanecen cerrados.
+3. **GA4** — creá la propiedad de GA4, obtené el ID `G-...` y guardalo en `NEXT_PUBLIC_GA_MEASUREMENT_ID`; con el valor vacío, GA4 permanece apagado.
+4. **Search Console** — agregá la propiedad URL-prefix de `https://oportunia-six.vercel.app` y verificá con etiqueta HTML en `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION`. La verificación por DNS TXT no está disponible en `*.vercel.app` (el DNS de Vercel no se controla); Search Console usa propiedad URL-prefix + etiqueta HTML. Después enviá el sitemap y recién entonces activá `SEO_INDEXING_ENABLED=true`.
+5. **AdSense** — llevá la cuenta a estado AdSense Ready, cargá `ADSENSE_PUBLISHER_ID` y los slots reales, y sólo aprueba `ADSENSE_READINESS_CONFIRMED=true` y `ADSENSE_ENABLED=true` con la evaluación interna aprobada.
 
 ## Variables de Vercel
 
@@ -20,23 +30,24 @@ No borres los usuarios fixture ni la rama aislada hasta conservar la evidencia. 
 | `DATABASE_URL` | URL de la rama correspondiente; nunca apuntes un preview de aceptación a producción. |
 | `NEON_AUTH_BASE_URL` | Endpoint de Auth de la misma rama que `DATABASE_URL`. |
 | `NEON_AUTH_COOKIE_SECRET` | Secreto fuerte y exclusivo del entorno; no se versiona. |
-| `NEXT_PUBLIC_SITE_URL` | `https://oportuniape.com` en producción. |
+| `NEXT_PUBLIC_SITE_URL` | `https://oportunia-six.vercel.app` en producción (origen exacto, sin ruta). |
 | `NEXT_PUBLIC_GA_MEASUREMENT_ID` | ID real `G-...`; vacío mantiene GA4 apagado. |
 | `SEO_INDEXING_ENABLED=false` | Estado obligatorio hasta aprobar el gate SEO. |
-| `ADSENSE_ENABLED` | Kill switch; `false` hasta aprobar el gate AdSense. |
-| `ADSENSE_READINESS_CONFIRMED` | `true` sólo con estado AdSense Ready y evaluación interna aprobada. |
+| `ADSENSE_ENABLED=false` | Kill switch; permanece `false` hasta aprobar el gate AdSense. |
+| `ADSENSE_READINESS_CONFIRMED=false` | Estado inicial; sólo pasa a `true` con AdSense Ready y evaluación interna aprobada. |
 | `ADSENSE_PUBLISHER_ID` y slots | IDs reales; nunca valores de ejemplo. |
+
+Los tres flags de salida (`SEO_INDEXING_ENABLED`, `ADSENSE_ENABLED` y `ADSENSE_READINESS_CONFIRMED`) arrancan y permanecen en `false` mientras su checklist no esté completa: no se inventan placeholders, `ads.txt` responde `404` y ningún slot se renderiza.
 
 ## Gate SEO
 
 Activá `SEO_INDEXING_ENABLED=true` únicamente cuando:
 
-- [ ] `oportuniape.com` resuelve por DNS, tiene certificado válido y figura verificado en Vercel.
-- [ ] El hostname legado redirige rutas y query strings al dominio canónico.
+- [ ] `https://oportunia-six.vercel.app` resuelve con certificado válido y figura desplegado en Vercel.
 - [ ] Portada, `/admin`, fichas, `robots.txt` y `sitemap.xml` responden de forma estable.
 - [ ] No existe ninguna URL productiva de localhost.
 - [ ] Las oportunidades cerradas están fuera del sitemap, la indexación y el marcado `JobPosting`.
-- [ ] Search Console verificó `oportuniape.com` y recibió el sitemap.
+- [ ] Search Console verificó la propiedad URL-prefix con etiqueta HTML y recibió el sitemap.
 - [ ] Las páginas legales contienen únicamente información real verificada.
 
 Con el gate cerrado, robots bloquea y el sitemap queda vacío.
@@ -46,7 +57,7 @@ Con el gate cerrado, robots bloquea y el sitemap queda vacío.
 Activá `ADSENSE_READINESS_CONFIRMED=true` y luego `ADSENSE_ENABLED=true` únicamente cuando:
 
 - [ ] La CMP certificada por Google fue probada al conceder, rechazar y retirar consentimiento.
-- [ ] GA4 y AdSense permanecen sin requests ni eventos antes de consentimiento válido.
+- [ ] GA4 y AdSense permanecen apagados sin consentimiento válido y sin requests ni eventos previos.
 - [ ] La cuenta está en estado AdSense Ready y publisher, slots y `/ads.txt` usan IDs reales.
 - [ ] GA4 está enlazado con AdSense y la medición fue verificada en ambas consolas.
 - [ ] Hay cero contenido demo.
@@ -55,7 +66,7 @@ Activá `ADSENSE_READINESS_CONFIRMED=true` y luego `ADSENSE_ENABLED=true` única
 - [ ] Se acumularon dos semanas de tráfico TikTok medido sin patrones sospechosos.
 - [ ] El E2E TikTok → ficha → fuente oficial fue aprobado.
 
-`ads.txt` responde `404` mientras publicidad o readiness estén apagados. El consentimiento se adapta al evento `oportunia:ads-consent`; rechazo, ausencia, error o revocación cierran GA4 y AdSense.
+`ads.txt` responde `404` mientras publicidad o readiness estén apagados. El consentimiento se adapta al evento `oportunia:ads-consent`; rechazo, ausencia, error o revocación cierran los dos propósitos por separado: la analítica (GA4) y la publicidad (AdSense).
 
 ## E2E contra el entorno migrado
 
