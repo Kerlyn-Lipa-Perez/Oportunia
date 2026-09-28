@@ -1,0 +1,60 @@
+name: PR Validation
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize, labeled, unlabeled]
+
+permissions:
+  pull-requests: read
+  issues: read
+
+jobs:
+  check-issue-reference:
+    name: Check Issue Reference
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.pull_request.body || '';
+            if (!/\b(closes|fixes|resolves)\s+#\d+/i.test(body)) {
+              core.setFailed('PR body must contain a closing keyword: "Closes #N", "Fixes #N", or "Resolves #N"');
+            }
+
+  check-issue-approved:
+    name: Check Issue Has status:approved
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.pull_request.body || '';
+            const matches = [...body.matchAll(/\b(?:closes|fixes|resolves)\s+#(\d+)/gi)];
+            if (matches.length === 0) {
+              core.setFailed('No linked issue found (expected "Closes #N")');
+              return;
+            }
+            for (const [, number] of matches) {
+              const { data: issue } = await github.rest.issues.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: Number(number),
+              });
+              const labels = issue.labels.map(l => typeof l === 'string' ? l : l.name);
+              if (!labels.includes('status:approved')) {
+                core.setFailed(`Issue #${number} is missing the "status:approved" label`);
+              }
+            }
+
+  check-type-label:
+    name: Check PR Has type:* Label
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const labels = (context.payload.pull_request.labels || []).map(l => l.name);
+            const typeLabels = labels.filter(n => n.startsWith('type:'));
+            if (typeLabels.length !== 1) {
+              core.setFailed(`PR must have exactly one "type:*" label (found: ${typeLabels.length})`);
+            }
