@@ -8,7 +8,7 @@ async function login(page: Page, email: string, password: string) {
   await page.getByLabel('Correo editorial').fill(email);
   await page.getByLabel('Contraseña').fill(password);
   await page.getByRole('button', { name: 'Ingresar' }).click();
-  await expect(page.getByRole('heading', { name: 'Convocatorias' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Resumen' })).toBeVisible();
 }
 
 function teamRow(page: Page, email: string) {
@@ -18,7 +18,10 @@ function teamRow(page: Page, email: string) {
 test('admin manages an editor while editorial access stays separated', async ({ browser, page }) => {
   await login(page, credentials.adminEmail, credentials.adminPassword);
   await page.reload();
+  await expect(page.getByRole('heading', { name: 'Resumen' })).toBeVisible();
+  await page.goto('/admin/convocatorias');
   await expect(page.getByRole('heading', { name: 'Convocatorias' })).toBeVisible();
+  await page.goto('/admin/equipo');
   await expect(page.getByRole('heading', { name: 'Equipo' })).toBeVisible();
 
   let row = teamRow(page, credentials.editorEmail);
@@ -48,9 +51,13 @@ test('admin manages an editor while editorial access stays separated', async ({ 
   const editorContext = await browser.newContext();
   const editorPage = await editorContext.newPage();
   await login(editorPage, credentials.editorEmail, credentials.editorPassword);
+  await editorPage.goto('/admin/convocatorias');
   await expect(editorPage.getByRole('button', { name: /Nueva convocatoria/ })).toBeVisible();
+  await editorPage.goto('/admin/ingesta');
   await expect(editorPage.getByRole('heading', { name: 'Carga y fuentes oficiales' })).toBeVisible();
+  await editorPage.goto('/admin/equipo');
   await expect(editorPage.getByRole('heading', { name: 'Equipo' })).toHaveCount(0);
+  await expect(editorPage.locator('.editor-team-row')).toHaveCount(0);
   const editorUsersApi = await editorPage.evaluate(async () => {
     const response = await fetch('/api/admin/users', { cache: 'no-store' });
     return { status: response.status, body: await response.json() };

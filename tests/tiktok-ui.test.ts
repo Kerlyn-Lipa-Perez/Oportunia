@@ -162,13 +162,13 @@ test('JSON-LD serialization neutralizes HTML tag starts', () => {
 });
 
 test('admin and attribution UI wire every required endpoint and editorial field', () => {
-  const panel = readFileSync('src/app/admin/panel.tsx', 'utf8');
+  const campanas = readFileSync('src/app/admin/campanas/page.tsx', 'utf8');
   const social = readFileSync('src/app/admin/social-campaigns.tsx', 'utf8');
   const detail = readFileSync('src/app/convocatorias/[slug]/page.tsx', 'utf8');
   const landing = readFileSync('src/app/tiktok/page.tsx', 'utf8');
   const tracker = readFileSync('src/components/attribution-tracker.tsx', 'utf8');
 
-  assert.match(panel, /SocialCampaignsPanel/);
+  assert.match(campanas, /SocialCampaignsPanel/);
   assert.match(social, /\/api\/admin\/social-campaigns\/analytics/);
   assert.match(social, /method:\s*'POST'/);
   assert.match(social, /method:\s*'PATCH'/);
@@ -181,10 +181,10 @@ test('admin and attribution UI wire every required endpoint and editorial field'
 });
 
 test('admin login button says only Ingresar and never mentions CMS', () => {
-  const panel = readFileSync('src/app/admin/panel.tsx', 'utf8');
+  const login = readFileSync('src/app/admin/login.tsx', 'utf8');
 
-  assert.match(panel, /'Ingresar'/);
-  assert.doesNotMatch(panel, /Ingresar al CMS/);
+  assert.match(login, /'Ingresar'/);
+  assert.doesNotMatch(login, /Ingresar al CMS/);
 });
 
 test('TikTok route keeps data failures distinct from the genuine empty state', () => {
