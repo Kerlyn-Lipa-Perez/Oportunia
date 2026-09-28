@@ -3,17 +3,10 @@ import { existsSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 import nextConfig from '../next.config';
 
-test('legacy Vercel hostname redirects every path to the canonical host', async () => {
-  assert.equal(typeof nextConfig.redirects, 'function');
-  const redirects = await nextConfig.redirects!();
-  assert.deepEqual(redirects, [
-    {
-      source: '/:path*',
-      has: [{ type: 'host', value: 'oportunia-six.vercel.app' }],
-      destination: 'https://oportuniape.com/:path*',
-      permanent: true,
-    },
-  ]);
+test('no redirect sends requests away from the canonical origin', () => {
+  assert.equal(nextConfig.redirects, undefined);
+  const vercelConfig = JSON.parse(readFileSync('vercel.json', 'utf8')) as Record<string, unknown>;
+  assert.equal(vercelConfig.redirects, undefined);
 });
 
 test('required owned pages and ads.txt route exist without fabricated identifiers', () => {
@@ -63,7 +56,7 @@ test('every indexable static page and TikTok declares its own canonical', () => 
 
 test('environment example is production-safe and leaves real IDs empty', () => {
   const environment = readFileSync('.env.example', 'utf8');
-  assert.match(environment, /^NEXT_PUBLIC_SITE_URL=https:\/\/oportuniape\.com$/m);
+  assert.match(environment, /^NEXT_PUBLIC_SITE_URL=https:\/\/oportunia-six\.vercel\.app$/m);
   assert.match(environment, /^SEO_INDEXING_ENABLED=false$/m);
   assert.match(environment, /^ADSENSE_ENABLED=false$/m);
   assert.match(environment, /^ADSENSE_READINESS_CONFIRMED=false$/m);

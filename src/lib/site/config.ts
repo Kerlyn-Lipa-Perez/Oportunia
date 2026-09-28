@@ -1,6 +1,5 @@
 import type { MetadataRoute } from 'next';
 
-export const CANONICAL_PRODUCTION_URL = 'https://oportuniape.com';
 export const LEGAL_CONTENT_LAST_MODIFIED = '2026-09-20';
 
 type Environment = Readonly<Record<string, string | undefined>>;
@@ -20,6 +19,8 @@ type SitemapOpportunity = {
   publishedAt?: string;
 };
 
+const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '0.0.0.0', '::1', '[::1]']);
+
 function normalizedUrl(value: string | undefined): string | undefined {
   if (!value) return undefined;
   try {
@@ -33,6 +34,21 @@ function normalizedUrl(value: string | undefined): string | undefined {
   }
 }
 
+export function isPublicHttpsOrigin(value: string | undefined): boolean {
+  if (!value) return false;
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === 'https:' &&
+      !url.username &&
+      !url.password &&
+      !LOCAL_HOSTNAMES.has(url.hostname)
+    );
+  } catch {
+    return false;
+  }
+}
+
 function validContactEmail(value: string | undefined): string | undefined {
   const email = value?.trim();
   return email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : undefined;
@@ -41,16 +57,13 @@ function validContactEmail(value: string | undefined): string | undefined {
 export function resolveSiteConfig(environment: Environment = process.env): SiteConfig {
   const isProduction = environment.NODE_ENV === 'production';
   const configuredUrl = normalizedUrl(environment.NEXT_PUBLIC_SITE_URL);
-  const canonicalConfigured = configuredUrl === CANONICAL_PRODUCTION_URL;
 
   return {
-    url: isProduction
-      ? CANONICAL_PRODUCTION_URL
-      : configuredUrl ?? 'http://localhost:3000',
+    url: configuredUrl ?? 'http://localhost:3000',
     isProduction,
     seoIndexingEnabled:
       isProduction &&
-      canonicalConfigured &&
+      isPublicHttpsOrigin(configuredUrl) &&
       environment.SEO_INDEXING_ENABLED === 'true',
     contactEmail: validContactEmail(environment.NEXT_PUBLIC_CONTACT_EMAIL),
   };
