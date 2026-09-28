@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { AdsenseProvider } from "@/lib/site/adsense-client";
 import { parseAdsenseConfig } from "@/lib/site/adsense";
+import { CmpBridge } from "@/lib/site/cmp-bridge-client";
 import { GoogleAnalytics } from "@/lib/site/analytics-client";
 import { parseGoogleAnalyticsConfig } from "@/lib/site/analytics";
 import { resolveSiteConfig } from "@/lib/site/config";
@@ -21,5 +22,5 @@ export const viewport: Viewport = { themeColor: "#12377b", width: "device-width"
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const adsense = parseAdsenseConfig();
   const analytics = parseGoogleAnalyticsConfig();
-  return <html lang="es-PE"><body><AdsenseProvider config={adsense}>{analytics.enabled ? <GoogleAnalytics config={analytics} /> : null}{children}</AdsenseProvider></body></html>;
+  return <html lang="es-PE"><body><CmpBridge /><AdsenseProvider config={adsense}>{analytics.enabled ? <GoogleAnalytics config={analytics} /> : null}{children}</AdsenseProvider></body></html>;
 }
