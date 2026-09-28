@@ -1,7 +1,19 @@
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 import { requireIsolatedDatabaseUrl } from './integration/database-test-guard';
+
+type GateManifest = { defaultGate: string[] };
+
+function readGateManifest(): GateManifest {
+  return JSON.parse(readFileSync('tests/gate-manifest.json', 'utf8')) as GateManifest;
+}
+
+function defaultGateFilesOnDisk(): string[] {
+  return readdirSync('tests')
+    .filter((name) => name.endsWith('.test.ts'))
+    .map((name) => `tests/${name}`);
+}
 
 const packageJson = JSON.parse(readFileSync('package.json', 'utf8')) as {
   scripts: Record<string, string>;
@@ -56,6 +68,28 @@ test('database integration rejects the current database target before loading da
   assert.ok(repositoryImportIndex > guardIndex, 'repository must load only after the isolation guard');
   assert.ok(databaseImportIndex > guardIndex, 'database client must load only after the isolation guard');
   assert.doesNotMatch(source, /^import .*src\/lib\/(?:repository|db\/index)/m);
+});
+
+test('every suite the default gate picks up is registered, including the consent bridge', () => {
+  const registered = new Set(readGateManifest().defaultGate);
+
+  assert.ok(
+    registered.has('tests/cmp-bridge.test.ts'),
+    'the consent bridge suite must be registered in the default gate file list',
+  );
+
+  for (const file of defaultGateFilesOnDisk()) {
+    assert.ok(registered.has(file), `${file} must be registered in tests/gate-manifest.json`);
+  }
+});
+
+test('registered default-gate suites exist and integration suites stay out of the list', () => {
+  const onDisk = defaultGateFilesOnDisk();
+
+  for (const file of readGateManifest().defaultGate) {
+    assert.ok(onDisk.includes(file), `registered ${file} must exist under tests/`);
+    assert.doesNotMatch(file, /integration/, 'the default gate never registers integration suites');
+  }
 });
 
 test('database integration requires a distinct current database target for comparison', () => {

@@ -86,6 +86,39 @@ test('production runbook keeps external DNS, Vercel and CMP work explicit', () =
   assert.match(runbook, /E2E_ADMIN_EMAIL/);
   assert.match(runbook, /0000.*0001.*0002.*0003.*0004/s);
   assert.match(runbook, /producción.*después.*E2E/is);
+
+  // R5: docs target the vercel.app origin with a human-driven 5-step console runbook.
+  assert.match(runbook, /oportunia-six\.vercel\.app/);
+  assert.match(runbook, /5 pasos/i);
+  // Search Console verification is URL-prefix + HTML tag (design D5).
+  assert.match(runbook, /URL-prefix/i);
+  assert.match(runbook, /etiqueta HTML/i);
+  // The literal DNS pin above now documents WHY DNS TXT is unavailable.
+  assert.match(runbook, /DNS TXT no está disponible en/i);
+  assert.match(runbook, /DNS de Vercel no se controla/i);
+  assert.match(runbook, /\*\.vercel\.app/);
+  // Fail-closed gates stay false until their own gate passes.
+  assert.match(runbook, /ADSENSE_ENABLED=false/);
+  assert.match(runbook, /ADSENSE_READINESS_CONFIRMED=false/);
+  assert.match(runbook, /sin consentimiento válido/i);
+  // Owned-domain DNS/apex/www/301 steps are gone.
+  assert.doesNotMatch(runbook, /oportuniape\.com/);
+  assert.doesNotMatch(runbook, /301/);
+  assert.doesNotMatch(runbook, /\bapex\b/i);
+  assert.doesNotMatch(runbook, /\bwww\./i);
+});
+
+test('cookies page documents split purposes and the four Consent Mode v2 signals', () => {
+  const cookies = readFileSync('src/app/cookies/page.tsx', 'utf8');
+  // Revocation must disable BOTH purposes: analytics and ads.
+  assert.match(cookies, /revoc/i);
+  assert.match(cookies, /anal[ií]tica.*y la publicidad/is);
+  assert.match(cookies, /AdSense/i);
+  // Consent Mode v2: all four signals are named on the page.
+  assert.match(cookies, /Consent Mode v2/i);
+  for (const signal of ['analytics_storage', 'ad_storage', 'ad_user_data', 'ad_personalization']) {
+    assert.match(cookies, new RegExp(signal));
+  }
 });
 
 test('admin provisioning runbook preserves the two-layer role and branch-first order', () => {
