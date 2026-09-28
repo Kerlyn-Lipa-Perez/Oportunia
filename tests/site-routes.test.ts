@@ -3,17 +3,10 @@ import { existsSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 import nextConfig from '../next.config';
 
-test('legacy Vercel hostname redirects every path to the canonical host', async () => {
-  assert.equal(typeof nextConfig.redirects, 'function');
-  const redirects = await nextConfig.redirects!();
-  assert.deepEqual(redirects, [
-    {
-      source: '/:path*',
-      has: [{ type: 'host', value: 'oportunia-six.vercel.app' }],
-      destination: 'https://oportuniape.com/:path*',
-      permanent: true,
-    },
-  ]);
+test('no redirect sends requests away from the canonical origin', () => {
+  assert.equal(nextConfig.redirects, undefined);
+  const vercelConfig = JSON.parse(readFileSync('vercel.json', 'utf8')) as Record<string, unknown>;
+  assert.equal(vercelConfig.redirects, undefined);
 });
 
 test('required owned pages and ads.txt route exist without fabricated identifiers', () => {
@@ -63,7 +56,7 @@ test('every indexable static page and TikTok declares its own canonical', () => 
 
 test('environment example is production-safe and leaves real IDs empty', () => {
   const environment = readFileSync('.env.example', 'utf8');
-  assert.match(environment, /^NEXT_PUBLIC_SITE_URL=https:\/\/oportuniape\.com$/m);
+  assert.match(environment, /^NEXT_PUBLIC_SITE_URL=https:\/\/oportunia-six\.vercel\.app$/m);
   assert.match(environment, /^SEO_INDEXING_ENABLED=false$/m);
   assert.match(environment, /^ADSENSE_ENABLED=false$/m);
   assert.match(environment, /^ADSENSE_READINESS_CONFIRMED=false$/m);
@@ -93,6 +86,39 @@ test('production runbook keeps external DNS, Vercel and CMP work explicit', () =
   assert.match(runbook, /E2E_ADMIN_EMAIL/);
   assert.match(runbook, /0000.*0001.*0002.*0003.*0004/s);
   assert.match(runbook, /producción.*después.*E2E/is);
+
+  // R5: docs target the vercel.app origin with a human-driven 5-step console runbook.
+  assert.match(runbook, /oportunia-six\.vercel\.app/);
+  assert.match(runbook, /5 pasos/i);
+  // Search Console verification is URL-prefix + HTML tag (design D5).
+  assert.match(runbook, /URL-prefix/i);
+  assert.match(runbook, /etiqueta HTML/i);
+  // The literal DNS pin above now documents WHY DNS TXT is unavailable.
+  assert.match(runbook, /DNS TXT no está disponible en/i);
+  assert.match(runbook, /DNS de Vercel no se controla/i);
+  assert.match(runbook, /\*\.vercel\.app/);
+  // Fail-closed gates stay false until their own gate passes.
+  assert.match(runbook, /ADSENSE_ENABLED=false/);
+  assert.match(runbook, /ADSENSE_READINESS_CONFIRMED=false/);
+  assert.match(runbook, /sin consentimiento válido/i);
+  // Owned-domain DNS/apex/www/301 steps are gone.
+  assert.doesNotMatch(runbook, /oportuniape\.com/);
+  assert.doesNotMatch(runbook, /301/);
+  assert.doesNotMatch(runbook, /\bapex\b/i);
+  assert.doesNotMatch(runbook, /\bwww\./i);
+});
+
+test('cookies page documents split purposes and the four Consent Mode v2 signals', () => {
+  const cookies = readFileSync('src/app/cookies/page.tsx', 'utf8');
+  // Revocation must disable BOTH purposes: analytics and ads.
+  assert.match(cookies, /revoc/i);
+  assert.match(cookies, /anal[ií]tica.*y la publicidad/is);
+  assert.match(cookies, /AdSense/i);
+  // Consent Mode v2: all four signals are named on the page.
+  assert.match(cookies, /Consent Mode v2/i);
+  for (const signal of ['analytics_storage', 'ad_storage', 'ad_user_data', 'ad_personalization']) {
+    assert.match(cookies, new RegExp(signal));
+  }
 });
 
 test('admin provisioning runbook preserves the two-layer role and branch-first order', () => {

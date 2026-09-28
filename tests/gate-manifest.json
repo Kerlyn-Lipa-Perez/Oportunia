@@ -1,0 +1,27 @@
+{
+  "defaultGate": [
+    "tests/ads-route.test.ts",
+    "tests/analytics-seo.test.ts",
+    "tests/auth-proxy.test.ts",
+    "tests/auth.test.ts",
+    "tests/cmp-bridge.test.ts",
+    "tests/db-connection.test.ts",
+    "tests/db-repository.test.ts",
+    "tests/db-schema.test.ts",
+    "tests/domain.test.ts",
+    "tests/drizzle-migrations.test.ts",
+    "tests/e2e-harness.test.ts",
+    "tests/ingestion-cron-route.test.ts",
+    "tests/ingestion-http.test.ts",
+    "tests/ingestion.test.ts",
+    "tests/legal-disclosures.test.ts",
+    "tests/site-foundation.test.ts",
+    "tests/site-routes.test.ts",
+    "tests/social-analytics.test.ts",
+    "tests/social-campaign-schema.test.ts",
+    "tests/social-campaigns.test.ts",
+    "tests/team-management.test.ts",
+    "tests/test-gate.test.ts",
+    "tests/tiktok-ui.test.ts"
+  ]
+}

@@ -3,7 +3,7 @@
 import Script from "next/script";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useEffect } from "react";
-import { useAdvertisingConsent } from "./adsense-client";
+import { useAnalyticsConsent, useConsentPurposes } from "./adsense-client";
 import {
   GA4_SCRIPT_ID,
   initializeGoogleAnalytics,
@@ -18,20 +18,24 @@ declare global {
 }
 
 function GoogleAnalyticsTracker({ config }: { config: GoogleAnalyticsConfig }) {
-  const consent = useAdvertisingConsent();
+  const consent = useAnalyticsConsent();
+  const purposes = useConsentPurposes();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const search = searchParams.toString();
 
   useEffect(() => {
-    if (!synchronizeGoogleAnalyticsConsent(window, config, consent)) return;
+    // Unresolved purposes (CMP not decided) keep every GA4 gate closed.
+    if (!purposes) return;
+    if (!synchronizeGoogleAnalyticsConsent(window, config, purposes)) return;
+    // GA4 follows analytics_storage only — an ad_storage grant never loads it.
     if (consent !== "granted") return;
-    if (!initializeGoogleAnalytics(window, config, consent)) return;
+    if (!initializeGoogleAnalytics(window, config, purposes)) return;
 
     const pagePath = search ? `${pathname}?${search}` : pathname;
     const pageLocation = new URL(pagePath, window.location.origin).toString();
-    trackGoogleAnalyticsPageView(window, config, consent, pageLocation);
-  }, [config.enabled, config.measurementId, consent, pathname, search]);
+    trackGoogleAnalyticsPageView(window, config, purposes, pageLocation);
+  }, [config.enabled, config.measurementId, consent, purposes, pathname, search]);
 
   if (consent !== "granted" || !config.enabled || !config.measurementId) return null;
 

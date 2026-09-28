@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
-  CANONICAL_PRODUCTION_URL,
   buildRobots,
   buildSitemapEntries,
   resolveSiteConfig,
@@ -15,25 +14,58 @@ import {
   parseConsentEvent,
 } from '../src/lib/site/adsense';
 
-test('production site config never emits localhost and only enables SEO explicitly', () => {
+const PRODUCTION_ORIGIN = 'https://oportunia-six.vercel.app';
+
+test('production site config resolves the canonical origin from the environment and fails closed', () => {
   const missing = resolveSiteConfig({ NODE_ENV: 'production' });
-  assert.equal(missing.url, CANONICAL_PRODUCTION_URL);
+  assert.equal(missing.url, 'http://localhost:3000');
   assert.equal(missing.seoIndexingEnabled, false);
 
-  const unsafe = resolveSiteConfig({
+  const malformed = resolveSiteConfig({
+    NODE_ENV: 'production',
+    NEXT_PUBLIC_SITE_URL: 'not-a-url',
+    SEO_INDEXING_ENABLED: 'true',
+  });
+  assert.equal(malformed.url, 'http://localhost:3000');
+  assert.equal(malformed.seoIndexingEnabled, false);
+
+  const localhost = resolveSiteConfig({
     NODE_ENV: 'production',
     NEXT_PUBLIC_SITE_URL: 'http://localhost:3000',
     SEO_INDEXING_ENABLED: 'true',
   });
-  assert.equal(unsafe.url, CANONICAL_PRODUCTION_URL);
-  assert.equal(unsafe.seoIndexingEnabled, false);
+  assert.equal(localhost.url, 'http://localhost:3000');
+  assert.equal(localhost.seoIndexingEnabled, false);
+
+  const insecure = resolveSiteConfig({
+    NODE_ENV: 'production',
+    NEXT_PUBLIC_SITE_URL: 'http://oportunia-six.vercel.app',
+    SEO_INDEXING_ENABLED: 'true',
+  });
+  assert.equal(insecure.url, 'http://oportunia-six.vercel.app');
+  assert.equal(insecure.seoIndexingEnabled, false);
+
+  const ipv6Localhost = resolveSiteConfig({
+    NODE_ENV: 'production',
+    NEXT_PUBLIC_SITE_URL: 'https://[::1]/',
+    SEO_INDEXING_ENABLED: 'true',
+  });
+  assert.equal(ipv6Localhost.url, 'https://[::1]');
+  assert.equal(ipv6Localhost.seoIndexingEnabled, false);
+
+  const credentialed = resolveSiteConfig({
+    NODE_ENV: 'production',
+    NEXT_PUBLIC_SITE_URL: 'https://user:pass@oportunia-six.vercel.app',
+    SEO_INDEXING_ENABLED: 'true',
+  });
+  assert.equal(credentialed.seoIndexingEnabled, false);
 
   const healthy = resolveSiteConfig({
     NODE_ENV: 'production',
-    NEXT_PUBLIC_SITE_URL: 'https://oportuniape.com/',
+    NEXT_PUBLIC_SITE_URL: 'https://oportunia-six.vercel.app/',
     SEO_INDEXING_ENABLED: 'true',
   });
-  assert.equal(healthy.url, CANONICAL_PRODUCTION_URL);
+  assert.equal(healthy.url, PRODUCTION_ORIGIN);
   assert.equal(healthy.seoIndexingEnabled, true);
 });
 
@@ -47,7 +79,7 @@ test('robots is fail-closed and always protects private routes', () => {
 
   const enabled = buildRobots(resolveSiteConfig({
     NODE_ENV: 'production',
-    NEXT_PUBLIC_SITE_URL: CANONICAL_PRODUCTION_URL,
+    NEXT_PUBLIC_SITE_URL: PRODUCTION_ORIGIN,
     SEO_INDEXING_ENABLED: 'true',
   }));
   assert.deepEqual(enabled.rules, {
@@ -55,13 +87,13 @@ test('robots is fail-closed and always protects private routes', () => {
     allow: '/',
     disallow: ['/admin', '/api/'],
   });
-  assert.equal(enabled.sitemap, `${CANONICAL_PRODUCTION_URL}/sitemap.xml`);
+  assert.equal(enabled.sitemap, `${PRODUCTION_ORIGIN}/sitemap.xml`);
 });
 
 test('sitemap includes legal pages and only active, non-demo opportunities with real modified dates', () => {
   const config = resolveSiteConfig({
     NODE_ENV: 'production',
-    NEXT_PUBLIC_SITE_URL: CANONICAL_PRODUCTION_URL,
+    NEXT_PUBLIC_SITE_URL: PRODUCTION_ORIGIN,
     SEO_INDEXING_ENABLED: 'true',
   });
   const entries = buildSitemapEntries(config, [
@@ -90,7 +122,7 @@ test('sitemap includes legal pages and only active, non-demo opportunities with 
 
   const urls = entries.map((entry) => entry.url);
   for (const path of ['/', '/como-funciona', '/nosotros', '/contacto', '/privacidad', '/cookies', '/terminos']) {
-    assert.ok(urls.includes(new URL(path, `${CANONICAL_PRODUCTION_URL}/`).toString().replace(/\/$/, path === '/' ? '' : '')));
+    assert.ok(urls.includes(new URL(path, `${PRODUCTION_ORIGIN}/`).toString().replace(/\/$/, path === '/' ? '' : '')));
   }
   const active = entries.find((entry) => entry.url.endsWith('/convocatorias/active-role'));
   assert.equal(active?.lastModified, '2026-09-18T10:00:00.000Z');
