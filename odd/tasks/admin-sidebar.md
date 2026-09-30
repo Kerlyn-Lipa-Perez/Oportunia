@@ -68,16 +68,16 @@ links, no refresh/back behaviour, and everything competes in one view.
 ## Forecast
 
 Authored changed lines (additions + deletions, including moved code): **~700–900 → above the 400-line advisory**.
-Delivery strategy: `ask-on-risk` (default) → chain strategy must be confirmed before the first commit.
+Delivery strategy: `single-pr` with maintainer-approved `size:exception` (user decision this session) — no chain strategy needed.
 
 ## Tasks
 
-- [ ] **T1** RED: add `tests/admin-layout.test.ts` asserting the sidebar layout contract (files, routes, admin-only equipo gate, login extraction). Run `pnpm test` and observe it fail.
-- [ ] **T2** GREEN: build `layout.tsx` + `sidebar.tsx` + `login.tsx`, create the five section pages, extract convocatorias/ingesta panels from `panel.tsx`, delete `panel.tsx`.
-- [ ] **T3** GREEN: sidebar/shell/responsive styles in `admin.css` (desktop sidebar + mobile drawer), aligned with the reference image.
-- [ ] **T4** Update `tests/tiktok-ui.test.ts` paths and `e2e/admin-users.spec.ts` navigation to the new routes; keep their existing assertions.
-- [ ] **T5** Verify: `pnpm typecheck` and `pnpm test` green; e2e only if environment allows.
-- [ ] **T6** Commit work-unit(s) on feature branch with Conventional Commits (no AI attribution), then RDD assess; record evidence below.
+- [x] **T1** RED: add `tests/admin-layout.test.ts` asserting the sidebar layout contract (files, routes, admin-only equipo gate, login extraction). Run `pnpm test` and observe it fail.
+- [x] **T2** GREEN: build `layout.tsx` + `sidebar.tsx` + `login.tsx`, create the five section pages, extract convocatorias/ingesta panels from `panel.tsx`, delete `panel.tsx`.
+- [x] **T3** GREEN: sidebar/shell/responsive styles in `admin.css` (desktop sidebar + mobile drawer), aligned with the reference image.
+- [x] **T4** Update `tests/tiktok-ui.test.ts` paths and `e2e/admin-users.spec.ts` navigation to the new routes; keep their existing assertions.
+- [x] **T5** Verify: `pnpm typecheck` and `pnpm test` green; e2e only if environment allows.
+- [x] **T6** Commit work-unit(s) on feature branch with Conventional Commits (no AI attribution), then RDD assess; record evidence below.
 
 ## Acceptance criteria
 
@@ -90,5 +90,44 @@ Delivery strategy: `ask-on-risk` (default) → chain strategy must be confirmed 
 ## Progress / evidence
 
 - TDD mode: Strict (session config) — runner `pnpm test`.
-- Delivery strategy: ask-on-risk — chain strategy: _pending confirmation_.
-- (evidence to be filled per task: commit ids, check results)
+- Delivery strategy: `single-pr` + `size:exception` (user-approved); no chaining.
+- **RED (T1)**: `tests/admin-layout.test.ts` added + registered in `tests/gate-manifest.json`;
+  scoped run showed `126 tests / 123 pass / 3 fail` (only the new tests failed, as intended).
+- **GREEN (T2–T4)**: delegated to one writer. Result: 16 files changed; `src/app/admin/panel.tsx`
+  deleted (rename detection moved it to `convocatorias/panel.tsx`); no stale `./panel` imports remain.
+- **Checks (T5)**:
+  - `pnpm typecheck` → exit 0.
+  - `pnpm test` → `126 tests / 126 pass / 0 fail`, exit 0.
+  - `pnpm build` → clean (routes `ƒ /admin/*` emitted).
+  - **E2E: NOT RUN** — `.env` has no `E2E_BASE_URL`/`PLAYWRIGHT_BASE_URL` and none of the four
+    `E2E_ADMIN_EMAIL`/`E2E_ADMIN_PASSWORD`/`E2E_EDITOR_EMAIL`/`E2E_EDITOR_PASSWORD` vars; the
+    harness refuses local URLs by design. Reported honestly as not-executed (not a failure).
+- **Commit (T6)**: `99efd60` on `feat/admin-sidebar`
+  — `feat(admin): split monolithic panel into sidebar layout with one route per section`
+  (16 files, +489/−88). Excluded dirty `package.json`, `pnpm-lock.yaml`, `next-env.d.ts`.
+- **RDD assess**: `risk: medium`, `review_due: true` (`slice_budget_reached`), 17 paths / 659 lines,
+  base `c095165`, lineage `review-87a21b3841a7e525`.
+- **RDD review: EXECUTED and APPROVED.** The first two lens launches failed with
+  `opencode_task_output_empty`: the reviewer model `opencode/mimo-v2.6-flash-free` spent its entire
+  32,000-token output budget inside reasoning (`step-finish reason:"length"`, 0 output tokens) and
+  returned no text, so no result was ever admitted. The review agents were moved to
+  `opencode/space-bunny-free` (524,288 output) and OpenCode was restarted; the lens then completed
+  cleanly through the injected transport.
+  Lineage `review-87a21b3841a7e525` (single `review-reliability` lens, correction budget 200 untouched):
+  `state: approved`, `result_hash: sha256:2346a5c107a8ca4d5a0544da18ca4f0e5c31959a2959e345d7993ea066857603`,
+  then acknowledged with `authority: burned`. 0 BLOCKER/CRITICAL and 0 corrections; 5 advisory
+  findings, all informational and none reopening this review:
+  - R3-001 WARNING — the `equipo` admin-only gate is asserted only as a source-text regex; the branch
+    that actually runs lives in the Playwright spec, outside the default gate.
+  - R3-002 WARNING — `isActivePath` has no per-route outcome assertion, so a wrong active highlight
+    would still pass the gate.
+  - R3-003 SUGGESTION — breadcrumb resolves by exact match while the highlight resolves by prefix, so
+    the two can disagree on an unknown admin route.
+  - R3-004 SUGGESTION — the mobile drawer has no Escape close and no focus relocation.
+  - R3-005 WARNING — this record shipped with T1–T6 unchecked and no check evidence; fixed by this
+    update.
+- **Re-verified for this documentation commit** (doc-only change, no code touched):
+  `pnpm typecheck` → exit 0. `pnpm test` → `126 tests / 126 pass / 0 fail`, exit 0.
+  `pnpm build` was last run at T5 and is deliberately not re-run for a docs-only commit.
+- Next: user decision on push/PR for `feat/admin-sidebar`. The dirty `package.json`, `pnpm-lock.yaml`
+  and `next-env.d.ts` stay out of the commit per the decision recorded above.
