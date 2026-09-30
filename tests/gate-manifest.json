@@ -1,5 +1,6 @@
 {
   "defaultGate": [
+    "tests/admin-layout.test.ts",
     "tests/ads-route.test.ts",
     "tests/analytics-seo.test.ts",
     "tests/auth-proxy.test.ts",
